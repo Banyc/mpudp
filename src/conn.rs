@@ -8,7 +8,7 @@ use std::{
 use tokio::net::UdpSocket;
 
 use crate::{
-    message::{Init, Session},
+    message::{Header, Init, Session},
     read::{MpUdpRead, UdpRecver},
     scheduler::new_stats,
     write::{MpUdpWrite, UdpSender},
@@ -44,6 +44,14 @@ impl MpUdpConn {
         }
         let conns = NonZeroUsize::new(sockets.len())
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "zero addresses"))?;
+        let session = Session::random();
+        let init = Init::new(session, conns);
+        let with_payload = false;
+        let header = Header::new(init, with_payload);
+        let header = header.encode();
+        for socket in &sockets {
+            socket.send(&header).await?;
+        }
         let mut write = vec![];
         let mut read = vec![];
         let stats = new_stats(sockets.len());
@@ -55,8 +63,6 @@ impl MpUdpConn {
         }
         let read_with_init = false;
         let read = MpUdpRead::new(read, stats.clone(), read_with_init);
-        let session = Session::random();
-        let init = Init::new(session, conns);
         let write = MpUdpWrite::new(write, stats, Some(init));
         Ok(Self { write, read })
     }

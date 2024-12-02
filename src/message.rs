@@ -9,9 +9,60 @@ use std::{
 //     Some(Init),
 // }
 
+pub const HEADER_SIZE: usize = INIT_SIZE + 1;
+pub type HeaderBuf = [u8; HEADER_SIZE];
+#[derive(Debug, Clone, Copy)]
+pub struct Header {
+    init: Init,
+    with_payload: bool,
+}
+impl Header {
+    pub fn new(init: Init, with_payload: bool) -> Self {
+        Self { init, with_payload }
+    }
+    pub fn init(&self) -> &Init {
+        &self.init
+    }
+    pub fn with_payload(&self) -> bool {
+        self.with_payload
+    }
+
+    pub fn encode(&self) -> HeaderBuf {
+        let mut buf = [0; HEADER_SIZE];
+        let mut wtr = io::Cursor::new(&mut buf[..]);
+        let init = self.init.encode();
+        wtr.write_all(&init[..]).unwrap();
+        match self.with_payload {
+            true => wtr.write_all(&[1]).unwrap(),
+            false => wtr.write_all(&[0]).unwrap(),
+        }
+        buf
+    }
+    pub fn decode(buf: HeaderBuf) -> io::Result<Self> {
+        let mut rdr = io::Cursor::new(&buf[..]);
+        let mut init = [0; INIT_SIZE];
+        rdr.read_exact(&mut init).unwrap();
+        let init = Init::decode(init)?;
+        let mut with_payload = [0];
+        rdr.read_exact(&mut with_payload).unwrap();
+        let with_payload = with_payload[0];
+        let with_payload = match with_payload {
+            0 => false,
+            1 => true,
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("unknown with_payload: {with_payload}"),
+                ));
+            }
+        };
+        Ok(Self { init, with_payload })
+    }
+}
+
 pub const INIT_SIZE: usize = 8 * 2;
 pub type InitBuf = [u8; INIT_SIZE];
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Init {
     session: Session,
     conns: NonZeroUsize,
@@ -36,13 +87,12 @@ impl Init {
         buf
     }
     pub fn decode(buf: InitBuf) -> io::Result<Self> {
-        let mut buf_reader = io::Cursor::new(&buf[..]);
-
+        let mut rdr = io::Cursor::new(&buf[..]);
         let mut session = 0_u64.to_be_bytes();
-        buf_reader.read_exact(&mut session).unwrap();
+        rdr.read_exact(&mut session).unwrap();
         let session = Session::new(u64::from_be_bytes(session));
         let mut conns = 0_u64.to_be_bytes();
-        buf_reader.read_exact(&mut conns).unwrap();
+        rdr.read_exact(&mut conns).unwrap();
         let conns = usize::try_from(u64::from_be_bytes(conns))
             .map_err(|e| io::Error::new(io::ErrorKind::Unsupported, e))?;
         let conns = NonZeroUsize::new(conns)

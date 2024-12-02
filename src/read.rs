@@ -1,21 +1,29 @@
-use std::{num::NonZeroUsize, sync::Arc, time::Instant};
+use std::{
+    io::{self, Read},
+    num::NonZeroUsize,
+    sync::Arc,
+    time::Instant,
+};
 
 use bytes::BytesMut;
 use primitive::arena::obj_pool::{ArcObjPool, ObjScoped};
 use tokio::{net::UdpSocket, task::JoinSet};
 use udp_listener::{ConnRead, Packet};
 
-use crate::{message::INIT_SIZE, scheduler::Stats};
+use crate::{
+    message::{HEADER_SIZE, Header},
+    scheduler::Stats,
+};
 
 #[derive(Debug)]
 pub struct MpUdpRead {
     rx: tokio::sync::mpsc::Receiver<(usize, UdpRecvPkt)>,
     _recving: JoinSet<()>,
     stats: Stats,
-    with_init: bool,
+    with_header: bool,
 }
 impl MpUdpRead {
-    pub(crate) fn new(conns: Vec<UdpRecver>, stats: Stats, with_init: bool) -> Self {
+    pub(crate) fn new(conns: Vec<UdpRecver>, stats: Stats, with_header: bool) -> Self {
         assert_eq!(conns.len(), stats.len());
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         let mut recving = JoinSet::new();
@@ -33,27 +41,39 @@ impl MpUdpRead {
             rx,
             _recving: recving,
             stats,
-            with_init,
+            with_header,
         }
     }
     pub async fn recv(&mut self, buf: &mut [u8]) -> Result<usize, RecvError> {
-        let (i, pkt) = self.rx.recv().await.ok_or(RecvError::Dead)?;
-        let now = Instant::now();
-        self.stats[i].lock().recv(now);
-        let pkt = pkt.get();
-        let payload = if self.with_init {
-            &pkt[INIT_SIZE..]
-        } else {
-            pkt
-        };
-        let copy_len = buf.len().min(payload.len());
-        buf[..copy_len].copy_from_slice(&payload[..copy_len]);
-        Ok(copy_len)
+        loop {
+            let (i, pkt) = self.rx.recv().await.ok_or(RecvError::Dead)?;
+            let now = Instant::now();
+            self.stats[i].lock().recv(now);
+            let pkt = pkt.get();
+            let payload = if self.with_header {
+                let mut rdr = io::Cursor::new(pkt);
+                let mut header = [0; HEADER_SIZE];
+                if rdr.read_exact(&mut header).is_err() {
+                    return Err(RecvError::BadPacket);
+                }
+                let header = Header::decode(header).map_err(|_| RecvError::BadPacket)?;
+                if !header.with_payload() {
+                    continue;
+                }
+                &pkt[HEADER_SIZE..]
+            } else {
+                pkt
+            };
+            let copy_len = buf.len().min(payload.len());
+            buf[..copy_len].copy_from_slice(&payload[..copy_len]);
+            return Ok(copy_len);
+        }
     }
 }
 #[derive(Debug, Clone)]
 pub enum RecvError {
     Dead,
+    BadPacket,
 }
 
 #[derive(Debug)]

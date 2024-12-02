@@ -8,7 +8,7 @@ use tokio::net::UdpSocket;
 use udp_listener::{ConnWrite, PACKET_BUFFER_LENGTH};
 
 use crate::{
-    message::Init,
+    message::{Header, Init},
     scheduler::{Rank, Stats},
 };
 
@@ -48,7 +48,9 @@ impl MpUdpWrite {
         let buf = match &self.init {
             Some(init) => {
                 self.buf.clear();
-                self.buf.extend(init.encode());
+                let with_payload = true;
+                let header = Header::new(*init, with_payload);
+                self.buf.extend(header.encode());
                 self.buf.extend(buf);
                 &self.buf
             }

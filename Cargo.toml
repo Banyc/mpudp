@@ -1,0 +1,11 @@
+[package]
+name = "mpudp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytes = "1"
+primitive = { git = "https://github.com/Banyc/primitive.git", tag = "v0.0.56" }
+rand = "0.8"
+tokio = { version = "1", features = ["full"] }
+udp_listener = { git = "https://github.com/Banyc/udp_listener.git", tag = "v0.0.13" }

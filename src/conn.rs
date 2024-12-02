@@ -10,7 +10,7 @@ use tokio::net::UdpSocket;
 use crate::{
     message::{Header, Init, Session},
     read::{MpUdpRead, UdpRecver},
-    scheduler::new_stats,
+    schedule::new_stats,
     write::{MpUdpWrite, UdpSender},
 };
 

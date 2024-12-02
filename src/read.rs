@@ -12,7 +12,7 @@ use udp_listener::{ConnRead, Packet};
 
 use crate::{
     message::{HEADER_SIZE, Header},
-    scheduler::Stats,
+    schedule::Stats,
 };
 
 #[derive(Debug)]

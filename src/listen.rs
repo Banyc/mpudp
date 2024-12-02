@@ -14,7 +14,7 @@ use crate::{
     conn::MpUdpConn,
     message::{HEADER_SIZE, Header},
     read::{MpUdpRead, UdpRecver},
-    scheduler::new_stats,
+    schedule::new_stats,
     write::{MpUdpWrite, UdpSender},
 };
 

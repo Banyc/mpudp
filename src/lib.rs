@@ -3,5 +3,5 @@ pub mod conn;
 pub mod listen;
 mod message;
 pub mod read;
-mod scheduler;
+mod schedule;
 pub mod write;

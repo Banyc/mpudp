@@ -9,7 +9,7 @@ use udp_listener::{ConnWrite, PACKET_BUFFER_LENGTH};
 
 use crate::{
     message::{Header, Init},
-    scheduler::{Rank, Stats},
+    schedule::{Rank, Stats},
 };
 
 const RANK_UPDATE_COOL_DOWN: Duration = Duration::from_secs(1);

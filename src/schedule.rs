@@ -100,7 +100,7 @@ fn rank<'a>(stats: impl Iterator<Item = &'a Stat> + Clone, out: &mut Vec<f64>, n
     out.clear();
     for stat in stats {
         let latency = stat.latency(now).max(EPSILON_LATENCY);
-        let weight = latency.as_secs_f64() / latency_sum.as_secs_f64();
+        let weight = 1. - latency.as_secs_f64() / latency_sum.as_secs_f64();
         out.push(weight);
     }
 }

@@ -27,7 +27,7 @@ impl MpUdpWrite {
     pub(crate) fn new(conns: Vec<UdpSender>, stats: Stats, init: Option<Init>) -> Self {
         assert_eq!(conns.len(), stats.len());
         let now = Instant::now();
-        let rank = Rank::new(conns.len(), now);
+        let rank = Rank::new(conns.len());
         let buf = Vec::with_capacity(PACKET_BUFFER_LENGTH);
         Self {
             conns,

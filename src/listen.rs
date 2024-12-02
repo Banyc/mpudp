@@ -23,7 +23,7 @@ const BACKLOG_MAX: usize = 64;
 
 #[derive(Debug)]
 pub struct MpUdpListener {
-    listeners: Vec<Arc<UtpListener<UdpSocket, SocketAddr, Packet>>>,
+    listeners: Vec<Listener>,
     complete: tokio::sync::mpsc::Receiver<io::Result<MpUdpConn>>,
     _backlog_handling: JoinSet<()>,
 }
@@ -36,8 +36,12 @@ impl MpUdpListener {
         let mut listeners = vec![];
         for addr in addrs {
             let socket = UdpSocket::bind(addr).await?;
+            let addr = socket.local_addr().unwrap();
             let listener = UtpListener::new_identity_dispatch(socket, dispatcher_buffer_size);
-            listeners.push(Arc::new(listener));
+            listeners.push(Listener {
+                listener: Arc::new(listener),
+                local_addr: addr,
+            });
         }
         if listeners.is_empty() {
             return Err(io::Error::new(
@@ -59,7 +63,7 @@ impl MpUdpListener {
         });
         let (tx, rx) = tokio::sync::mpsc::channel(BACKLOG_MAX);
         for listener in &listeners {
-            let listener = Arc::clone(listener);
+            let listener = Arc::clone(&listener.listener);
             let backlog = Arc::clone(&backlog);
             let complete = tx.clone();
             backlog_handling.spawn(async move {
@@ -116,4 +120,24 @@ impl MpUdpListener {
             _backlog_handling: backlog_handling,
         })
     }
+
+    /// # Cancel safety
+    ///
+    /// This method is cancel safe. If `accept` is used as the event in a `tokio::select` statement and some other branch completes first, it is guaranteed that no streams were received on this listener.
+    pub async fn accept(&mut self) -> io::Result<MpUdpConn> {
+        self.complete
+            .recv()
+            .await
+            .expect("senders will never drop proactively")
+    }
+
+    pub fn local_addrs(&self) -> impl Iterator<Item = SocketAddr> + '_ {
+        self.listeners.iter().map(|listener| listener.local_addr)
+    }
+}
+
+#[derive(Debug)]
+struct Listener {
+    pub listener: Arc<UtpListener<UdpSocket, SocketAddr, Packet>>,
+    pub local_addr: SocketAddr,
 }

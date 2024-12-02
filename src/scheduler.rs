@@ -56,15 +56,11 @@ impl Stat {
 #[derive(Debug, Clone)]
 pub struct Rank {
     values: Vec<f64>,
-    last_update: Instant,
 }
 impl Rank {
-    pub fn new(values: usize, now: Instant) -> Self {
+    pub fn new(values: usize) -> Self {
         let values = (0..values).map(|_| 1. / values as f64).collect();
-        Self {
-            values,
-            last_update: now,
-        }
+        Self { values }
     }
     pub fn update_rank<'a>(&mut self, stats: impl Iterator<Item = &'a Stat> + Clone, now: Instant) {
         rank(stats, &mut self.values, now);

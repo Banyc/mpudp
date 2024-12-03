@@ -47,6 +47,7 @@ where
                 }
                 let incomplete_list = EphemeralVec::new(size);
                 incomplete_table.insert(key.clone(), incomplete_list);
+                drop(incomplete_table);
                 self.handle(key, value, size)
             }
         }

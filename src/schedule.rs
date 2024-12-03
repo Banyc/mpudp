@@ -81,6 +81,9 @@ impl Rank {
     }
     pub fn choose_explore(&self, except: usize) -> Option<usize> {
         assert!(except < self.values.len());
+        if self.values.len() == 1 {
+            return None;
+        }
         let mut rng = rand::thread_rng();
         let p = rng.gen_range(0. ..=1.);
         if p < EXPLORE_PROB {

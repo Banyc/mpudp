@@ -44,30 +44,52 @@ impl MpUdpRead {
             with_header,
         }
     }
+
+    pub fn try_recv(&mut self, buf: &mut [u8]) -> Result<Option<usize>, RecvError> {
+        loop {
+            let (i, pkt) = match self.rx.try_recv() {
+                Ok(x) => x,
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                    return Err(RecvError::Dead);
+                }
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => return Ok(None),
+            };
+            let Some(n) = self.copy(buf, i, pkt)? else {
+                continue;
+            };
+            return Ok(Some(n));
+        }
+    }
     pub async fn recv(&mut self, buf: &mut [u8]) -> Result<usize, RecvError> {
         loop {
             let (i, pkt) = self.rx.recv().await.ok_or(RecvError::Dead)?;
-            let now = Instant::now();
-            self.stats[i].lock().recv(now);
-            let pkt = pkt.get();
-            let payload = if self.with_header {
-                let mut rdr = io::Cursor::new(pkt);
-                let mut header = [0; HEADER_SIZE];
-                if rdr.read_exact(&mut header).is_err() {
-                    return Err(RecvError::BadPacket);
-                }
-                let header = Header::decode(header).map_err(|_| RecvError::BadPacket)?;
-                if !header.with_payload() {
-                    continue;
-                }
-                &pkt[HEADER_SIZE..]
-            } else {
-                pkt
+            let Some(n) = self.copy(buf, i, pkt)? else {
+                continue;
             };
-            let copy_len = buf.len().min(payload.len());
-            buf[..copy_len].copy_from_slice(&payload[..copy_len]);
-            return Ok(copy_len);
+            return Ok(n);
         }
+    }
+    fn copy(&self, buf: &mut [u8], i: usize, pkt: UdpRecvPkt) -> Result<Option<usize>, RecvError> {
+        let now = Instant::now();
+        self.stats[i].lock().recv(now);
+        let pkt = pkt.get();
+        let payload = if self.with_header {
+            let mut rdr = io::Cursor::new(pkt);
+            let mut header = [0; HEADER_SIZE];
+            if rdr.read_exact(&mut header).is_err() {
+                return Err(RecvError::BadPacket);
+            }
+            let header = Header::decode(header).map_err(|_| RecvError::BadPacket)?;
+            if !header.with_payload() {
+                return Ok(None);
+            }
+            &pkt[HEADER_SIZE..]
+        } else {
+            pkt
+        };
+        let copy_len = buf.len().min(payload.len());
+        buf[..copy_len].copy_from_slice(&payload[..copy_len]);
+        Ok(Some(copy_len))
     }
 }
 #[derive(Debug, Clone)]
